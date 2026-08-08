@@ -8,7 +8,7 @@ codes — from MIMIC-III electronic health records by fusing clinical notes (via
 convolutional text encoder) with structured/tabular admission features.
 
 <p align="center">
-  <img src="figs/CPSC671_Model_Architecture.drawio.png" alt="MMAC-Net pipeline" width="700">
+  <img src="figs/MMAC_Net_pipeline.drawio.png" alt="MMAC-Net pipeline" width="700">
 </p>
 
 This codebase builds on the architecture and training utilities of the
