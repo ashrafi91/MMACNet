@@ -10,6 +10,9 @@ convolutional text encoder) with structured/tabular admission features.
 <p align="center">
   <img src="figs/MMAC_Net_pipeline.drawio.png" alt="MMAC-Net pipeline" width="700">
 </p>
+<p align="center">
+  <img src="figs/MMACNet.pdf" alt="MMAC-Net architecture" width="700">
+</p>
 
 This codebase builds on the architecture and training utilities of the
 [ICD Coding Benchmark](https://github.com/dalgu90/icd-coding-benchmark) (Kim, Sharma, Shanbhogue),
