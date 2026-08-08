@@ -1,0 +1,16 @@
+captum
+gensim
+matplotlib
+nltk
+numpy
+pandas
+pre-commit
+PyYAML
+scikit-learn
+seaborn
+streamlit
+tensorboard
+torch
+torchsummaryX
+tqdm
+transformers

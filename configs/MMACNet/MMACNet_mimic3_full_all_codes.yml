@@ -1,0 +1,140 @@
+paths:
+  mimic_dir: &mimic_dir ${MIMIC_CSV_DIR:-datasets/mimic3/csv}
+  static_dir: &static_dir ${MIMIC_STATIC_DIR:-datasets/mimic3/static}
+  dataset_dir: &dataset_dir datasets/mimic3_full
+  word2vec_dir: &word2vec_dir datasets/mimic3_full/word2vec
+  output_dir: &output_dir results/MMACNet_mimic3_full
+
+dataset:
+  name: base_dataset
+  data_common: &data_common
+    column_names:
+      hadm_id: "HADM_ID"
+      clinical_note: "TEXT"
+      labels: "LABELS"
+    word2vec_dir: *word2vec_dir
+    pad_token: "<pad>"
+    unk_token: "<unk>"
+    dataset_dir: *dataset_dir
+    label_file: labels.json
+    max_length: 500
+  params:
+    train:
+      <<: *data_common
+      data_file: train.json
+    val:
+      <<: *data_common
+      data_file: val.json
+    test:
+      <<: *data_common
+      data_file: test.json
+
+model:
+  name: MMACNet
+  params:
+    version: mimic3
+    dataset_dir: *dataset_dir
+    mimic_dir: *mimic_dir
+    static_dir: *static_dir
+    word2vec_dir: *word2vec_dir
+    num_classes: 8930
+    embed_size: 100
+    kernel_size: 9                    # was 100 – drastically reduces conv params
+    num_filter_maps: 128              # was 50  – wider feature maps for richer representations
+    dropout: 0.2
+    fc_dropout: 0.2
+    lmbda: 0.0  # Positive for DR-CAML
+    init_code_emb: false
+    pad_token: "<pad>"
+    unk_token: "<unk>"
+    conv_block_depth: 6               # was 4   – deeper network with residual connections
+    fc_layer_dims: [128, 64]          # was [128, 8693] – CRITICAL: eliminated bloated final layer
+    use_batch_norm: true
+    conv_activation: relu
+    conv_block_dropout: 0.15
+    use_residual: true                # residual skip connections for stable deep training
+    use_se_block: true                # squeeze-and-excitation channel attention
+    se_reduction: 4                   # SE bottleneck ratio
+    use_depthwise_separable: true     # parameter-efficient convolutions (blocks 2+)
+    tabular_hidden_dim: 64
+    tabular_fusion: "early"
+trainer:
+  name: base_trainer
+  params:
+    output_dir: *output_dir
+    data_loader:
+      batch_size: 512
+      num_workers: 16
+      shuffle: false
+      drop_last: true
+    loss:
+      name: CrossEntropyLoss
+      params: null
+    optimizer:
+      name: adam
+      params:
+        lr: 0.0001
+        weight_decay: 0.0
+    max_epochs: 200
+    lr_scheduler: 
+      name: cosineanneal
+      params: 
+        T_max: 200
+    stopping_criterion:
+      metric:
+        name: prec_at_8
+      desired: max
+      patience: 15
+    checkpoint_saver:
+      name: base_saver
+      params:
+        checkpoint_dir: *output_dir
+        interval: 5
+        max_to_keep: 5
+        ckpt_fname_format: "ckpt-{}.pth"
+        best_fname_format: "best-{}.pth"
+        metric:
+          name: prec_at_8
+          class: prec_at_k
+          params:
+            k: 8
+        desired: max
+    eval_metrics: 
+      - name: prec_at_8
+        class: prec_at_k
+        params:
+          k: 8
+      - name: prec_at_15
+        class: prec_at_k
+        params:
+          k: 15
+      - name: macro_f1
+      - name: micro_f1
+      - name: macro_auc
+      - name: micro_auc
+    graph:
+      writer:
+        name: tensorboard
+        params:
+          log_dir: *output_dir
+      train:
+        eval_interval_epochs: 5
+        interval: 100
+        interval_unit: step
+        metric:
+          - name: loss
+      val:
+        eval_interval_epochs: 5
+        interval: 5
+        interval_unit: epoch
+        metric:
+          - name: loss
+          - name: prec_at_8
+          - name: prec_at_15
+          - name: macro_f1
+          - name: micro_f1
+          - name: macro_auc
+          - name: micro_auc
+      eval_interval_epochs: 5
+    seed: 1337
+    use_gpu: true
