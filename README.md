@@ -132,9 +132,9 @@ A snapshot from the last run (58,976 admissions / 46,520 patients total; 39,304 
 |--------------------------------------|--------|--------|
 | Admissions                           | 58,976 | 39,304 |
 | Unique patients                      | 46,520 | 31,515 |
-| Distinct ICD-9 codes                 | 6,947  | 618    |
+| Distinct ICD-9 codes                 | 6,947  | 568    |
 | Mean age                             | 53.5   | 60.5   |
-| Unique ICD-9 codes per admission (avg)| 11.04  | 1.69   |
+| Unique ICD-9 codes per admission (avg)| 11.04  | 4.72   |
 
 See `figs/dataset_analysis/` for the corresponding demographic, length-of-stay, and rare-disease
 frequency plots.
