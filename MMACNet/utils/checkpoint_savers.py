@@ -34,7 +34,7 @@ class BaseCheckpointSaver(object):
     def load_ckpt_info(self):
         info_fpath = os.path.join(self.config.checkpoint_dir, self.info_fname)
         if os.path.exists(info_fpath):
-            # Load json (convert int string to int)
+
             info = load_json(info_fpath)
             info["iter_ckpts"] = {
                 int(i): fname for i, fname in info["iter_ckpts"].items()
@@ -44,7 +44,7 @@ class BaseCheckpointSaver(object):
             return {"best_ckpt": None, "iter_ckpts": {}}
 
     def clean_up_ckpt_info(self, info):
-        # Check best ckpt
+
         if info["best_ckpt"]:
             ckpt_fpath = os.path.join(
                 self.config.checkpoint_dir, info["best_ckpt"]["fname"]
@@ -52,7 +52,7 @@ class BaseCheckpointSaver(object):
             if not os.path.exists(ckpt_fpath):
                 info["best_ckpt"] = None
 
-        # Check iter based ckpts
+
         for train_iter, ckpt_fname in info["iter_ckpts"].items():
             ckpt_fpath = os.path.join(self.config.checkpoint_dir, ckpt_fname)
             if not os.path.exists(ckpt_fpath):
@@ -84,13 +84,13 @@ class BaseCheckpointSaver(object):
         metric_val=None,
         return_metric=True,
     ):
-        # Compute the current metric value
+
         if metric_val is None:
             metric_val = self.metric(
                 y_true=y_true, y_pred=y_pred, p_pred=p_pred
             )
 
-        # Compare with the best metric value
+
         info = self.load_ckpt_info()
         info = self.clean_up_ckpt_info(info)
         if info["best_ckpt"]:
@@ -123,11 +123,11 @@ class BaseCheckpointSaver(object):
         metric_val=None,
         ckpt_fname=None,
     ):
-        # Load ckpt info
+
         info = self.load_ckpt_info()
         info = self.clean_up_ckpt_info(info)
 
-        # New checkpoint data and name
+
         checkpoint = {
             "model": model.state_dict(),
             "optimizer": optimizer.state_dict() if optimizer else None,
@@ -139,12 +139,12 @@ class BaseCheckpointSaver(object):
                 ckpt_fname = self.config.ckpt_fname_format.format(train_iter)
         ckpt_fpath = os.path.join(self.config.checkpoint_dir, ckpt_fname)
 
-        # Save new ckpt
+
         if not os.path.exists(self.config.checkpoint_dir):
             os.makedirs(self.config.checkpoint_dir)
 
         if is_best:
-            # For best, delete the old one and save the new one
+
             assert metric_val is not None
             if info["best_ckpt"]:
                 old_ckpt_fpath = os.path.join(
@@ -159,7 +159,7 @@ class BaseCheckpointSaver(object):
                 self.config.metric.name: metric_val,
             }
         else:
-            # For iter based ckpt, save first and delete excessive ones
+
             info["iter_ckpts"] = {
                 i: fname
                 for i, fname in info["iter_ckpts"].items()
@@ -179,7 +179,7 @@ class BaseCheckpointSaver(object):
                 os.remove(old_ckpt_fpath)
                 del info["iter_ckpts"][i]
 
-        # Save ckpt info
+
         self.save_ckpt_info(info)
         return ckpt_fname
 

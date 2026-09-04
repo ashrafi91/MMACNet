@@ -1,4 +1,4 @@
-# Imports
+
 import argparse
 import json
 import os
@@ -120,7 +120,7 @@ def _resolve_num_classes(config):
 
 
 def main():
-    # Command line arguments
+
     parser = argparse.ArgumentParser(description="Train or test the model")
     parser.add_argument(
         "--config_path", type=str, action="store", help="Path to the config file"
@@ -140,17 +140,17 @@ def main():
     )
     args = parser.parse_args()
 
-    # Config
+
     config = Config(path=args.config_path)
 
-    if not args.test:  # Training
-        # Seed
+    if not args.test:
+
         seed(config.trainer.params.seed)
 
-        # Auto-resolve num_classes from labels.json to prevent mismatches
+
         _resolve_num_classes(config)
 
-        # Load dataset
+
         train_data = ConfigMapper.get_object("datasets", config.dataset.name)(
             config.dataset.params.train
         )
@@ -158,41 +158,48 @@ def main():
             config.dataset.params.val
         )
 
-        # Model
+
         model = ConfigMapper.get_object("models", config.model.name)(
             config.model.params
         )
 
         if args.model_summary:
             _print_model_summary(model, config)
-        # Trainer
+
         trainer = ConfigMapper.get_object("trainers", config.trainer.name)(
             config.trainer.params
         )
 
-        # Train!
+
         trainer.train(model, train_data, val_data)
-    else:  # Test
-        # Auto-resolve num_classes from labels.json to prevent mismatches
+    else:
+
         _resolve_num_classes(config)
 
-        # Load dataset
+
         test_data = ConfigMapper.get_object("datasets", config.dataset.name)(
             config.dataset.params.test
         )
 
-        # Model
+
+        val_data = None
+        if getattr(config.trainer.params, "tune_threshold_on_val", False):
+            val_data = ConfigMapper.get_object("datasets", config.dataset.name)(
+                config.dataset.params.val
+            )
+
+
         model = ConfigMapper.get_object("models", config.model.name)(
             config.model.params
         )
 
-        # Trainer
+
         trainer = ConfigMapper.get_object("trainers", config.trainer.name)(
             config.trainer.params
         )
 
-        # Test!
-        trainer.test(model, test_data)
+
+        trainer.test(model, test_data, val_dataset=val_data)
 
 if __name__=="__main__":
     freeze_support()

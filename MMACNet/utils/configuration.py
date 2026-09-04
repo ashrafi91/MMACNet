@@ -1,30 +1,8 @@
 import copy
-import os
-import re
 
 import yaml
 
 from MMACNet.utils.mapper import ConfigMapper
-
-# Matches ${VAR} or ${VAR:-default}, e.g. so config files can read
-# "${MIMIC_CSV_DIR:-datasets/mimic3/csv}" instead of hardcoding a path
-# that's only valid on one machine.
-_ENV_VAR_PATTERN = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)(:-(.*?))?\}")
-
-
-def _expand_env_vars(value):
-    """Recursively expand ${VAR} / ${VAR:-default} in strings loaded from YAML."""
-    if isinstance(value, str):
-        def _replace(match):
-            var_name, _, default = match.groups()
-            return os.environ.get(var_name, default if default is not None else "")
-
-        return _ENV_VAR_PATTERN.sub(_replace, value)
-    if isinstance(value, dict):
-        return {k: _expand_env_vars(v) for k, v in value.items()}
-    if isinstance(value, list):
-        return [_expand_env_vars(v) for v in value]
-    return value
 
 
 def load_yaml(path):
@@ -40,9 +18,7 @@ def load_yaml(path):
     Returns
     -------
     result : dict
-        The dictionary from the config file. String values support shell-like
-        environment variable expansion, e.g. "${MIMIC_CSV_DIR:-datasets/mimic3/csv}"
-        resolves to the MIMIC_CSV_DIR env var if set, otherwise the default after ":-".
+        The dictionary from the config file
     """
 
     assert isinstance(path, str), "Provided path is not a string"
@@ -50,9 +26,9 @@ def load_yaml(path):
         f = open(path, "r")
         result = yaml.load(f, Loader=yaml.Loader)
     except FileNotFoundError as e:
-        # Adding this for future functionality
+
         raise e
-    return _expand_env_vars(result)
+    return result
 
 
 def convert_params_to_dict(params):
@@ -89,8 +65,8 @@ class Config:
         Return the config object as dictionary
 
         Possible update:
-        ## Can be converted using __getattr__ to use **kwargs
-        ## with the Config object directly.
+
+
 
     set_value(attr,value)
         Set the value of a particular attribute.
@@ -119,7 +95,7 @@ class Config:
             raise Exception(
                 "Need either path or dict object to instantiate object."
             )
-        # self.keys = self._config.keys()
+
 
     def __getattr__(self, attr):
         """

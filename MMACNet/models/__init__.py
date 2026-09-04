@@ -1,1 +1,1 @@
-from MMACNet.models import MMACNet_GCN
+from MMACNet.models import mmacnet

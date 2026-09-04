@@ -37,7 +37,7 @@ def map_dict_to_obj(dic):
 
 
 def get_item_in_config(config, path):
-    # config is a dictionary
+
     curr = config
     if isinstance(config, dict):
         for step in path:
@@ -52,43 +52,43 @@ def get_item_in_config(config, path):
     return curr
 
 
-# init = train_config.grid_search
-# curr = get_item_in_config(init,['hyperparams','loader_params'])
-# curr.set_value('batch_size',1)
-# print(train_config.grid_search)
+
+
+
+
 
 
 def generate_grid_search_configs(main_config, grid_config, root="hyperparams"):
-    # DFS
+
     locations_values_pair = {}
     init = grid_config.as_dict()
-    # print(init)
+
     stack = [root]
     visited = [stack[-1]]
 
     log_label_path = None
     hparams_path = None
 
-    # root = init[stack[-1]]
+
     while len(stack) != 0:
         root = get_item_in_config(init, stack)
         flag = 0
-        # print(visited)
-        # print(stack)
+
+
         if (
             not isinstance(root, dict) and "hparams" not in stack
-        ):  # Meaning it is a leaf node
-            # print(stack)
+        ):
+
             if isinstance(root, list):
                 locations_values_pair[
                     tuple(copy.deepcopy(stack))
-                ] = root  # Append the current stack, and the list values
+                ] = root
             else:
                 locations_values_pair[tuple(copy.deepcopy(stack))] = [
                     root,
-                ]  # Append the current stack, and the list values
+                ]
 
-            _ = stack.pop()  # Pop this root because we don't need it.
+            _ = stack.pop()
         else:
             if isinstance(root, list) and "hparams" in stack:
                 hparams_path = copy.deepcopy(stack)
@@ -111,9 +111,9 @@ def generate_grid_search_configs(main_config, grid_config, root="hyperparams"):
                         "log_label",
                     ]
                 )
-            parent = root  # Otherwise it has children
+            parent = root
 
-        for key in parent.keys():  # For the children
+        for key in parent.keys():
             if (
                 ".".join(
                     stack
@@ -122,9 +122,9 @@ def generate_grid_search_configs(main_config, grid_config, root="hyperparams"):
                     ]
                 )
                 not in visited
-            ):  # Check if I have visited these children
-                flag = 1  # If not, we need to repeat the process for this key
-                stack.append(key)  # Append this key to the stack
+            ):
+                flag = 1
+                stack.append(key)
                 visited.append(".".join(stack))
                 break
         if flag == 0:
@@ -155,10 +155,10 @@ def generate_grid_search_configs(main_config, grid_config, root="hyperparams"):
     return result_configs
 
 
-# HTML formatting for visualizing word importance
-# Source: https://github.com/gchhablani/toxic-spans-detection/
+
+
 def _get_color(attr):
-    # clip values to prevent CSS errors (Values should be from [-1,1])
+
     attr = max(-1, min(1, attr))
     if attr > 0:
         hue = 10
@@ -167,13 +167,13 @@ def _get_color(attr):
     else:
         hue = 220
         sat = 100
-        # lig = 100 - int(-125 * attr)
+
         lig = 100 - int(-80 * attr)
     return "hsl({}, {}%, {}%)".format(hue, sat, lig)
 
 
 def format_special_tokens(token):
-    """Convert <> to # if there are any HTML syntax tags.
+    """Convert <> to
 
     Example: '<Hello>' will be converted to '#Hello' to avoid confusion
     with HTML tags.
@@ -196,7 +196,7 @@ def html_word_importance(words, importances):
         zip(words, importances[: len(words)])
     ):
         word = format_special_tokens(word)
-        for character in word:  ## Printing Weird Words
+        for character in word:
             if ord(character) >= 128:
                 print(word)
                 break

@@ -1,4 +1,5 @@
 import logging
+import os
 import sys
 from datetime import datetime
 
@@ -6,7 +7,9 @@ TIME_SINCE_EPOCH = datetime.timestamp(datetime.now())
 FORMATTER = logging.Formatter(
     "%(asctime)s — %(name)s — %(levelname)s — %(message)s"
 )
-LOG_FILE = f"logs/{TIME_SINCE_EPOCH}.log"
+LOG_DIR = os.environ.get("MMACNET_LOG_DIR", "logs")
+os.makedirs(LOG_DIR, exist_ok=True)
+LOG_FILE = os.path.join(LOG_DIR, f"{TIME_SINCE_EPOCH}.log")
 
 
 def get_console_handler():

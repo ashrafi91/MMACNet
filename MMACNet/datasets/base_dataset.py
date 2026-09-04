@@ -6,7 +6,7 @@ import pandas as pd
 import torch
 from torch.utils.data import Dataset
 
-from MMACNet.utils.file_loaders import load_csv_as_df, load_json, save_json
+from MMACNet.utils.file_loaders import load_json
 from MMACNet.utils.mapper import ConfigMapper
 from MMACNet.utils.text_loggers import get_logger
 
@@ -18,7 +18,7 @@ class BaseDataset(Dataset):
     def __init__(self, config):
         self._config = config
 
-        # Load vocab (dict of {word: idx})
+
         embedding_cls = ConfigMapper.get_object("embeddings", "word2vec")
         self.vocab = embedding_cls.load_vocab(self._config.word2vec_dir)
         self.vocab_size = len(self.vocab)
@@ -27,7 +27,7 @@ class BaseDataset(Dataset):
         self.unk_idx = self.vocab[self._config.unk_token]
         self.inv_vocab = {i: w for w, i in self.vocab.items()}
 
-        # Load labels (dict of {code: idx})
+
         label_path = os.path.join(
             self._config.dataset_dir, self._config.label_file
         )
@@ -41,10 +41,10 @@ class BaseDataset(Dataset):
             )
         )
 
-        # To-do: This class currently deals with only JSON files. We can extend
-        # this to deal with other file types (.csv, .xlsx, etc.).
 
-        # Load data (JSON)
+
+
+
         data_path = os.path.join(
             self._config.dataset_dir, self._config.data_file
         )
@@ -79,17 +79,19 @@ class BaseDataset(Dataset):
         row = self.df.iloc[idx]
         clinical_note = row[self._config.column_names.clinical_note]
         label_val = row[self._config.column_names.labels]
+
+
         if isinstance(label_val, str):
             codes = [label_val]
-        elif isinstance(label_val, (list, tuple)) and label_val:
-            codes = [str(label_val[0])]
+        elif isinstance(label_val, (list, tuple, np.ndarray)):
+            codes = [str(c) for c in label_val]
         else:
             codes = []
 
-        # Note (list) -> word idxs (UNK is assigned at the last word)
+
         token_idxs = self.encode_tokens(clinical_note)
 
-        # ICD codes -> binary labels
+
         labels = self.encode_labels(codes)
         one_hot_labels = np.zeros(self.num_labels, dtype=np.int32)
         for l in labels:
@@ -115,8 +117,13 @@ class BaseDataset(Dataset):
         return [self.inv_vocab[idx] for idx in token_idxs]
 
     def encode_labels(self, codes):
-        """Convert list of ICD codes into labels"""
-        return [self.all_labels[c] for c in codes]
+        """Convert list of ICD codes into label indices.
+
+        Codes outside the fitted label space (e.g. dropped by ``top_k``) are
+        skipped rather than raising, so a restricted label vocabulary stays
+        usable.
+        """
+        return [self.all_labels[c] for c in codes if c in self.all_labels]
 
     def decode_labels(self, labels):
         """Convert labels into list of ICD codes"""
@@ -194,55 +201,11 @@ class BaseDataset(Dataset):
         if os.path.exists(meta_path):
             logger.info(f"Loading tabular metadata from {meta_path}")
             return load_json(meta_path)
-        meta = self._create_tabular_meta()
-        save_json(meta, meta_path)
-        logger.info(f"Saved tabular metadata to {meta_path}")
-        return meta
-
-    def _create_tabular_meta(self):
-        categorical_meta = {}
-        numerical_meta = {}
-        categorical_order = []
-        numerical_order = []
-
-        for col in self.extra_feature_cols:
-            series = self.df[col]
-            if self._is_numeric_series(series):
-                clean_series = pd.to_numeric(series, errors="coerce")
-                mean = float(clean_series.mean(skipna=True))
-                std = float(clean_series.std(skipna=True))
-                if math.isnan(mean):
-                    mean = 0.0
-                if math.isnan(std) or std == 0.0:
-                    std = 1.0
-                numerical_meta[col] = {"mean": mean, "std": std}
-                numerical_order.append(col)
-            else:
-                values = (
-                    series.dropna()
-                    .astype(str)
-                    .apply(lambda v: v.strip() if isinstance(v, str) else v)
-                    .tolist()
-                )
-                unique_values = sorted(set(values))
-                if not unique_values:
-                    continue
-                mapping = {
-                    val: idx + 1 for idx, val in enumerate(unique_values)
-                }
-                categorical_meta[col] = {
-                    "mapping": mapping,
-                    "unk_index": 0,
-                    "num_classes": len(unique_values) + 1,
-                }
-                categorical_order.append(col)
-
-        return {
-            "categorical": categorical_meta,
-            "numerical": numerical_meta,
-            "categorical_order": categorical_order,
-            "numerical_order": numerical_order,
-        }
+        raise FileNotFoundError(
+            f"tabular_meta.json not found at {meta_path}. It is fit on the "
+            "training split by run_preprocessing.py and must not be derived "
+            "from val/test data. Run the preprocessing pipeline first."
+        )
 
     def _prepare_tabular_features(self, row):
         categorical = []
@@ -270,8 +233,3 @@ class BaseDataset(Dataset):
             numerical.append(normalized)
 
         return {"categorical": categorical, "numerical": numerical}
-
-    def _is_numeric_series(self, series):
-        numeric_series = pd.to_numeric(series, errors="coerce")
-        non_null_ratio = numeric_series.notnull().mean()
-        return non_null_ratio > 0.8

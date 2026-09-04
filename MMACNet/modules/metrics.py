@@ -18,7 +18,7 @@ logger = get_logger(__name__)
 
 
 def to_np_array(array):
-    # Keep None as it is, and convert others into Numpy array
+
     if array is not None and not isinstance(array, np.ndarray):
         array = np.array(array)
     return array
@@ -54,30 +54,56 @@ def load_metric(config):
     return ConfigMapper.get_object("metrics", metric_class)(metric_params)
 
 
-#########################################################################
-# Macro Metrics: computes metrics for each label, and average over labels
-#########################################################################
+
+
+
 
 
 @ConfigMapper.map("metrics", "macro_prec")
 class MacroPrecision(Metric):
+    """Precision computed per label and averaged over all labels.
+
+    Labels that are never predicted contribute a precision of 0 (rather than
+    raising ``UndefinedMetricWarning``), matching the convention used for
+    ``macro_f1`` so the macro precision/recall/F1 triple stays consistent.
+    """
+
     def forward(self, y_true, y_pred=None, p_pred=None):
         y_pred = y_pred if y_pred is not None else p_pred.round()
-        return precision_score(y_true=y_true, y_pred=y_pred, average="macro")
+        return precision_score(
+            y_true=y_true, y_pred=y_pred, average="macro", zero_division=0
+        )
 
 
 @ConfigMapper.map("metrics", "macro_rec")
 class MacroRecall(Metric):
+    """Recall computed per label and averaged over all labels.
+
+    Labels with no positive ground-truth example contribute a recall of 0
+    (rather than raising ``UndefinedMetricWarning``).
+    """
+
     def forward(self, y_true, y_pred=None, p_pred=None):
         y_pred = y_pred if y_pred is not None else p_pred.round()
-        return recall_score(y_true=y_true, y_pred=y_pred, average="macro")
+        return recall_score(
+            y_true=y_true, y_pred=y_pred, average="macro", zero_division=0
+        )
 
 
 @ConfigMapper.map("metrics", "macro_f1")
 class MacroF1(Metric):
+    """Unweighted mean F1 over every label.
+
+    Section 4.2 convention: a label for which no positive prediction is made
+    contributes an F1 of zero and IS included in the average.  ``zero_division=0``
+    encodes exactly that.
+    """
+
     def forward(self, y_true, y_pred=None, p_pred=None):
         y_pred = y_pred if y_pred is not None else p_pred.round()
-        return f1_score(y_true=y_true, y_pred=y_pred, average="macro")
+        return f1_score(
+            y_true=y_true, y_pred=y_pred, average="macro", zero_division=0
+        )
 
 
 @ConfigMapper.map("metrics", "macro_auc")
@@ -91,7 +117,7 @@ class MacroAUC(Metric):
 
     def forward(self, y_true, y_pred=None, p_pred=None):
         assert p_pred is not None
-        # Filter out the class without positive examples
+
         pos_flag = y_true.sum(axis=0) > 0
         y_true = y_true[:, pos_flag]
         p_pred = p_pred[:, pos_flag]
@@ -105,9 +131,9 @@ class MacroAUC(Metric):
             return np.mean(result.get())
 
 
-##########################################################################
-# Micro Metrics: treat all predictions as in the same label
-##########################################################################
+
+
+
 
 
 @ConfigMapper.map("metrics", "micro_prec")
@@ -138,9 +164,9 @@ class MicroAUC(Metric):
         return roc_auc_score(y_true, p_pred, average="micro")
 
 
-##########################################################################
-# Metrics@K
-##########################################################################
+
+
+
 
 
 @ConfigMapper.map("metrics", "recall_at_k")
@@ -150,13 +176,13 @@ class RecallAtK(Metric):
         self.k = self.config.k
 
     def forward(self, y_true, y_pred=None, p_pred=None):
-        # We need scores
+
         assert p_pred is not None
 
-        # Get the top-k predictons
+
         top_k = np.argsort(p_pred)[:, : -(self.k + 1) : -1]
 
-        # Compute precision
+
         precs = []
         for y, t in zip(y_true, top_k):
             correct = y[t].sum()
@@ -174,13 +200,13 @@ class PrecAtK(Metric):
         self.k = self.config.k
 
     def forward(self, y_true, y_pred=None, p_pred=None):
-        # We need scores
+
         assert p_pred is not None
 
-        # Get the top-k predictons
+
         top_k = np.argsort(p_pred)[:, : -(self.k + 1) : -1]
 
-        # Compute precision
+
         precs = []
         for y, t in zip(y_true, top_k):
             correct = y[t].sum()
@@ -190,9 +216,9 @@ class PrecAtK(Metric):
         return np.mean(precs)
 
 
-##########################################################################
-# Others
-##########################################################################
+
+
+
 
 
 @ConfigMapper.map("metrics", "accuracy")
@@ -200,3 +226,36 @@ class Accuracy(Metric):
     def forward(self, y_true, y_pred=None, p_pred=None):
         y_pred = y_pred if y_pred is not None else p_pred.round()
         return accuracy_score(y_true=y_true.ravel(), y_pred=y_pred.ravel())
+
+
+
+
+
+
+DEFAULT_THRESHOLD_GRID = tuple(round(0.05 * i, 2) for i in range(1, 20))
+
+
+def tune_global_threshold(
+    y_true,
+    p_pred,
+    metric="micro_f1",
+    grid=DEFAULT_THRESHOLD_GRID,
+):
+    """Return the single probability threshold that maximises ``metric``.
+
+    Section 4.2: "Decision thresholds for the F1 metrics are selected on the
+    validation split only and applied unchanged to the test split."  Only the
+    validation ``(y_true, p_pred)`` should ever be passed here.
+    """
+    y_true = to_np_array(y_true)
+    p_pred = to_np_array(p_pred)
+    average = "macro" if metric.startswith("macro") else "micro"
+    best_threshold, best_score = 0.5, -1.0
+    for threshold in grid:
+        preds = (p_pred >= threshold).astype(int)
+        score = f1_score(
+            y_true=y_true, y_pred=preds, average=average, zero_division=0
+        )
+        if score > best_score:
+            best_threshold, best_score = float(threshold), float(score)
+    return best_threshold, best_score

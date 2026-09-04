@@ -7,12 +7,13 @@
 
 
 
+
 paths:
   mimic_dir: &mimic_dir datasets/mimic3/csv
   static_dir: &static_dir datasets/mimic3/static
-  dataset_dir: &dataset_dir datasets/mimic3_full
-  word2vec_dir: &word2vec_dir datasets/mimic3_full/word2vec
-  output_dir: &output_dir results/MMACNet_mimic3_full
+  dataset_dir: &dataset_dir datasets/mimic3_rare
+  word2vec_dir: &word2vec_dir datasets/mimic3_rare/word2vec
+  output_dir: &output_dir results/ablation/rare_notes_categorical
 
 dataset:
   name: base_dataset
@@ -46,10 +47,10 @@ model:
     mimic_dir: *mimic_dir
     static_dir: *static_dir
     word2vec_dir: *word2vec_dir
-    num_classes: 8930
+    num_classes: 568
     embed_size: 100
-    kernel_size: 100
-    num_filter_maps: 128
+    kernel_size: 50
+    num_filter_maps: 50
     conv_block_depth: 6
     dropout: 0.6
     fc_dropout: 0.3
@@ -58,7 +59,7 @@ model:
     init_code_emb: false
     pad_token: "<pad>"
     unk_token: "<unk>"
-    fc_layer_dims: [1024, 8930]
+    fc_layer_dims: [1024, 568]
     use_batch_norm: true
     conv_activation: relu
     use_se_block: true
@@ -67,7 +68,7 @@ model:
     use_depthwise_separable: true
     tabular_hidden_dim: 50
     tabular_fusion: late
-    tabular_modalities: [numerical, categorical]
+    tabular_modalities: [categorical]
 
 trainer:
   name: base_trainer

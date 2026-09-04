@@ -1,9 +1,19 @@
+
+
+
+
+
+
+
+
+
+
 paths:
-  mimic_dir: &mimic_dir ${MIMIC_CSV_DIR:-datasets/mimic3/csv}
-  static_dir: &static_dir ${MIMIC_STATIC_DIR:-datasets/mimic3/static}
-  dataset_dir: &dataset_dir datasets/mimic3_full
-  word2vec_dir: &word2vec_dir datasets/mimic3_full/word2vec
-  output_dir: &output_dir results/MMACNetGNN_mimic3
+  mimic_dir: &mimic_dir datasets/mimic3/csv
+  static_dir: &static_dir datasets/mimic3/static
+  dataset_dir: &dataset_dir datasets/mimic3_rare
+  word2vec_dir: &word2vec_dir datasets/mimic3_rare/word2vec
+  output_dir: &output_dir results/MMACNet_mimic3_rare
 
 dataset:
   name: base_dataset
@@ -30,7 +40,7 @@ dataset:
       data_file: test.json
 
 model:
-  name: MMACNetGNN
+  name: MMACNet
   params:
     version: mimic3
     dataset_dir: *dataset_dir
@@ -41,54 +51,55 @@ model:
     embed_size: 100
     kernel_size: 50
     num_filter_maps: 50
+    conv_block_depth: 6
     dropout: 0.6
     fc_dropout: 0.3
-    lmbda: 0.0  # Positive for DR-CAML
+    conv_block_dropout: 0.0
+    lmbda: 0.25
     init_code_emb: false
     pad_token: "<pad>"
     unk_token: "<unk>"
-    conv_block_depth: 3
     fc_layer_dims: [1024, 568]
-    use_batch_norm: True
+    use_batch_norm: true
     conv_activation: relu
+    use_se_block: true
+    se_reduction: 4
+    use_residual: true
+    use_depthwise_separable: true
     tabular_hidden_dim: 50
-    tabular_fusion: "late"
-    # Label graph encoder settings (new)
-    label_encoder_type: dir   # options: gcn (default), dir, gps
-    label_graph_path: datasets/mimic3_full/label_graph.npy
-    label_graph_use_desc_embeddings: false
-    label_graph_hidden_dims: [128, 128]
-    label_graph_activation: relu
-    label_global_heads: 4
-    label_graph_dropout: 0.3
-    label_edge_dropout: 0.05
-    label_stochastic_depth: 0.0
-    label_query_use_text_summary: true
+    tabular_fusion: late
+    tabular_modalities: [numerical, categorical]
+
 trainer:
   name: base_trainer
   params:
     output_dir: *output_dir
+    tune_threshold_on_val: true
+    threshold_metric: micro_f1
     data_loader:
-      batch_size: 32
-      num_workers: 8
-      shuffle: false
+      batch_size: 512
+      num_workers: 16
+      shuffle: true
       drop_last: true
     loss:
-      name: CrossEntropyLoss
+      name: BinaryCrossEntropyLoss
       params: null
     optimizer:
       name: adam
       params:
-        lr: 0.0005
+        lr: 0.001
         weight_decay: 0.0
     max_epochs: 200
-    lr_scheduler: 
+    lr_scheduler:
       name: cosineanneal
-      params: 
+      params:
         T_max: 200
     stopping_criterion:
       metric:
         name: prec_at_8
+        class: prec_at_k
+        params:
+          k: 8
       desired: max
       patience: 15
     checkpoint_saver:
@@ -105,7 +116,7 @@ trainer:
           params:
             k: 8
         desired: max
-    eval_metrics: 
+    eval_metrics:
       - name: prec_at_8
         class: prec_at_k
         params:
@@ -115,7 +126,11 @@ trainer:
         params:
           k: 15
       - name: macro_f1
+      - name: macro_prec
+      - name: macro_rec
       - name: micro_f1
+      - name: micro_prec
+      - name: micro_rec
       - name: macro_auc
       - name: micro_auc
     graph:

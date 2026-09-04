@@ -1,11 +1,13 @@
+
+
 paths:
-  mimic_dir: &mimic_dir ${MIMIC_CSV_DIR:-datasets/mimic3/csv}
-  static_dir: &static_dir ${MIMIC_STATIC_DIR:-datasets/mimic3/static}
+  mimic_dir: &mimic_dir datasets/mimic3/csv
+  static_dir: &static_dir datasets/mimic3/static
   dataset_dir: &dataset_dir datasets/mimic3_full
   word2vec_dir: &word2vec_dir datasets/mimic3_full/word2vec
 
 preprocessing:
-  name: mimic_iii_preprocessing_pipeline_all_codes
+  name: mimic_iii_preprocessing_pipeline
   params:
     paths:
       mimic_dir: *mimic_dir
@@ -16,23 +18,16 @@ preprocessing:
       noteevents_csv_name: NOTEEVENTS.csv.gz
       prescriptions_csv_name: PRESCRIPTIONS.csv.gz
       microbiology_events_csv_name: MICROBIOLOGYEVENTS.csv.gz
-
-      train_json_name: train.json       # will be saved
-      val_json_name: val.json           # will be saved
-      test_json_name: test.json         # will be saved
-      label_json_name: labels.json      # will be computed and saved
-      label_freq_json_name: null
+      train_json_name: train.json
+      val_json_name: val.json
+      test_json_name: test.json
+      label_json_name: labels.json
+      label_freq_json_name: label_freq.json
     dataset_metadata:
       column_names:
         subject_id: SUBJECT_ID
         hadm_id: HADM_ID
-        chartdate: CHARTDATE
-        charttime: CHARTTIME
-        storetime: STORETIME
         category: CATEGORY
-        description: DESCRIPTION
-        cgid: CGID
-        iserror: ISERROR
         text: TEXT
         icd9_code: ICD9_CODE
         labels: LABELS
@@ -49,9 +44,9 @@ preprocessing:
       name: caml_official_split
       params:
         hadm_dir: *static_dir
-        train_hadm_ids_name: train_full_split.json
-        val_hadm_ids_name: val_full_split.json
-        test_hadm_ids_name: test_full_split.json
+        train_hadm_ids_name: train_full_hadm_ids.json
+        val_hadm_ids_name: dev_full_hadm_ids.json
+        test_hadm_ids_name: test_full_hadm_ids.json
     clinical_note_preprocessing:
       to_lower:
         perform: true
@@ -64,20 +59,27 @@ preprocessing:
         perform: true
         params:
           stopwords_file_path: null
-          remove_common_medical_terms: true
+          remove_common_medical_terms: false
       stem_or_lemmatize:
         perform: true
         params:
           stemmer_name: nltk.WordNetLemmatizer
       truncate:
-        perform: false
+        perform: true
+        params:
+          max_length: 1500
+    retain_section_headers: true
     incorrect_code_loading: false
     count_duplicate_codes: false
     code_preprocessing:
-      top_k: 0                       # enter 0 for all codes
+      top_k: 0
       code_type: both
       add_period_in_correct_pos:
         perform: true
+      rare_subset: false
+    structured:
+      categorical_fields: [DRUG_TYPE, DRUG, PROD_STRENGTH, ROUTE, ORG_ITEMID, AB_ITEMID, INTERPRETATION]
+      numerical_fields: [DOSE_VAL_RX, DILUTION_VALUE]
     train_embed_with_all_split: false
     tokenizer:
       name: spacetokenizer

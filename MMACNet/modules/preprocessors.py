@@ -18,12 +18,12 @@ from MMACNet.utils.text_loggers import get_logger
 
 logger = get_logger(__name__)
 
-# nltk.download("omw-1.4")
-# nltk.download("rslp")
-# nltk.download("stopwords")
-# nltk.download("wordnet")
 
-# Clinical Note preprocessing
+
+
+
+
+
 AVAILABLE_STEMMERS_LEMMATIZERS = {
     "nltk.LancasterStemmer": LancasterStemmer,
     "nltk.PorterStemmer": PorterStemmer,
@@ -51,7 +51,7 @@ class ClinicalNotePreprocessor:
             else:
                 self.stopword_list = set(stopwords.words("english"))
             if config.remove_stopwords.params.remove_common_medical_terms:
-                # add a few common terms used in medicine
+
                 self.stopword_list.update(
                     {
                         "admission",
@@ -90,7 +90,7 @@ class ClinicalNotePreprocessor:
                 ]()
 
     def __call__(self, text):
-        # Remove extra spaces from text
+
         text = re.sub(" +", " ", text).strip()
         if self._config.to_lower.perform:
             text = text.lower()

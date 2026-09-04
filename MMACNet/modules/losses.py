@@ -16,6 +16,12 @@ ConfigMapper.map("losses", "CrossEntropyLoss")(CrossEntropyLoss)
 
 @ConfigMapper.map("losses", "BinaryCrossEntropyLoss")
 class BinaryCrossEntropyLoss(BCEWithLogitsLoss):
+    """Multi-label binary cross-entropy with logits (manuscript Eq. 4).
+
+    The description regulariser term ``lambda * L_reg`` (Eq. 3 / Eq. 5) is added
+    by the trainer via ``model.regularizer(...)`` and is not part of this class.
+    """
+
     def __init__(self, config):
         self.config = config
         super().__init__(**(config.as_dict() if config else {}))
@@ -24,6 +30,10 @@ class BinaryCrossEntropyLoss(BCEWithLogitsLoss):
         if target.dtype != torch.float:
             target = target.float()
         return super().forward(input=input, target=target)
+
+
+
+ConfigMapper.map("losses", "bce")(BinaryCrossEntropyLoss)
 
 
 @ConfigMapper.map("losses", "BinaryCrossEntropyWithLabelSmoothingLoss")

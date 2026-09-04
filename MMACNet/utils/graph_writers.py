@@ -26,7 +26,7 @@ class TensorboardGraphWriter(GraphWriterBase):
 
         super().__init__(config)
 
-        # Tensorboard writer
+
         self.writer = SummaryWriter(log_dir=self.config.log_dir)
 
     def write_scalar(self, name, value, step=None):

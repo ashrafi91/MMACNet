@@ -9,13 +9,13 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from MMACNet.modules.metrics import load_metric
+from MMACNet.modules.metrics import load_metric, tune_global_threshold
 from MMACNet.utils.configuration import Config
 from MMACNet.utils.file_loaders import save_json
 from MMACNet.utils.mapper import ConfigMapper
 from MMACNet.utils.text_loggers import get_logger
 
-# Prefer CUDA; fall back to CPU if unavailable
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
@@ -36,7 +36,7 @@ class BaseTrainer:
         logger.debug(f"Initializing {cls_name} with config: {config}")
         self.config = config
 
-        # Loss function
+
         self.loss_fn = ConfigMapper.get_object(
             "losses",
             self.config.loss.name,
@@ -46,7 +46,7 @@ class BaseTrainer:
             f"config: {self.config.loss.params}"
         )
 
-        # Evaluation metrics
+
         self.eval_metrics = {}
         for config_dict in self.config.eval_metrics:
             metric_name = config_dict.name
@@ -58,14 +58,14 @@ class BaseTrainer:
         self.train_dataset = train_dataset
         self.val_dataset = val_dataset
 
-        # Data loader
+
         train_loader_config = self.config.data_loader.as_dict()
         logger.debug(f"Creating train DataLoader: {train_loader_config}")
         if "collate_fn" in dir(train_dataset):
             train_loader_config["collate_fn"] = train_dataset.collate_fn
         train_loader = DataLoader(train_dataset, **train_loader_config, multiprocessing_context=None)
         if val_dataset:
-            # We force the val dataset not shuffled and fully used
+
             val_loader_config = self.config.data_loader.as_dict()
             val_loader_config["drop_last"] = False
             val_loader_config["shuffle"] = False
@@ -79,7 +79,7 @@ class BaseTrainer:
         else:
             num_train_batch = math.ceil(len(train_dataset) / batch_size)
 
-        # Optimizer & LR scheduler
+
         optimizer = ConfigMapper.get_object(
             "optimizers", self.config.optimizer.name
         )(model.parameters(), **self.config.optimizer.params.as_dict())
@@ -111,7 +111,7 @@ class BaseTrainer:
                     f"config: {self.config.lr_scheduler.params}"
                 )
 
-        # Add evaluation metrics for graph
+
         for config in (
             self.config.graph.train.metric + self.config.graph.val.metric
         ):
@@ -125,18 +125,18 @@ class BaseTrainer:
             metric.name for metric in self.config.graph.val.metric
         ]
 
-        # Stopping criterion: (metric, max/min, patience)
+
         max_epochs = int(self.config.max_epochs)
         stopping_criterion = None
         if self.config.stopping_criterion is not None:
             sc_config = self.config.stopping_criterion
-            # Load metric
+
             sc_metric_config = sc_config.metric
             if sc_metric_config.name in self.eval_metrics:
                 sc_metric = self.eval_metrics[sc_metric_config.name]
             else:
                 sc_metric = load_metric(sc_metric_config)
-            # Metric + max/min + patience
+
             stopping_criterion = (
                 sc_metric,
                 sc_config.desired,
@@ -151,12 +151,12 @@ class BaseTrainer:
             model.to(device)
             logger.info(f"Using device: {device}")
 
-        # Checkpoint saver
+
         ckpt_saver = ConfigMapper.get_object(
             "checkpoint_savers", self.config.checkpoint_saver.name
         )(self.config.checkpoint_saver.params)
 
-        # Load latest checkpoint (before DataParallel wrapping so keys match)
+
         latest_ckpt = ckpt_saver.get_latest_checkpoint()
         if latest_ckpt is not None:
             ckpt_epoch, ckpt_fname = latest_ckpt
@@ -168,7 +168,7 @@ class BaseTrainer:
         else:
             init_epoch = 0
 
-        # Wrap model in DataParallel for multi-GPU training (after ckpt load)
+
         if self.config.use_gpu:
             num_gpus = torch.cuda.device_count()
             if num_gpus > 1:
@@ -176,7 +176,7 @@ class BaseTrainer:
                 model = nn.DataParallel(model)
         global_step = (len(train_dataset) // batch_size) * init_epoch
 
-        # Graph Writer (tensorboard)
+
         writer = ConfigMapper.get_object(
             "graph_writers", self.config.graph.writer.name
         )(self.config.graph.writer.params)
@@ -184,14 +184,14 @@ class BaseTrainer:
             1, int(getattr(self.config, "eval_interval_epochs", 1))
         )
 
-        # Train!
+
         for epoch in range(init_epoch, max_epochs):
-            # Print training epoch
+
             logger.info(f"Epoch: {epoch}/{max_epochs}, Step {global_step:6}")
 
             model.train()
 
-            # Train for one epoch
+
             pbar = tqdm(total=num_train_batch)
             pbar.set_description(f"Epoch {epoch}")
             for batch_train in train_loader:
@@ -220,7 +220,7 @@ class BaseTrainer:
                 if scheduler:
                     scheduler.step()
 
-                # Write graph on proper steps (train)
+
                 if (
                     self.config.graph.train.interval_unit == "step"
                     and global_step % self.config.graph.train.interval == 0
@@ -241,7 +241,7 @@ class BaseTrainer:
                 global_step += 1
             pbar.close()
 
-            # Evaluate on eval dataset
+
             should_eval = (
                 val_dataset
                 and (
@@ -278,7 +278,7 @@ class BaseTrainer:
                     )
                     logger.info(f"{metric_name:>12}: {metric_val:6f}")
 
-            # Plot graph on proper epochs (val)
+
             if (
                 should_eval
                 and self.config.graph.val.interval_unit == "epoch"
@@ -294,16 +294,16 @@ class BaseTrainer:
                         f"val/{metric_name}", metric_val, step=global_step
                     )
 
-            # Update learning rate
+
             if scheduler is not None:
                 if isinstance(scheduler, ReduceLROnPlateau):
-                    # ReduceLROnPlateau uses validation loss
+
                     if should_eval:
                         scheduler.step(val_loss)
                 else:
                     scheduler.step()
 
-            # Update best stopping condition
+
             if should_eval and stopping_criterion:
                 metric, desired, patience = stopping_criterion
                 stopping_val = metric(
@@ -316,14 +316,14 @@ class BaseTrainer:
                     best_stopping_val = stopping_val
                     best_stopping_epoch = epoch
 
-            # Checkpoint 1. Per interval epoch
+
             if ckpt_saver.check_interval(epoch):
                 ckpt_fname = ckpt_saver.save_ckpt(
                     model=_unwrap_model(model), optimizer=optimizer, train_iter=epoch
                 )
                 logger.info(f"Checkpoint saved to {ckpt_fname}")
 
-            # Checkpoint 2. Best val metric
+
             if should_eval:
                 metric_val, is_best = ckpt_saver.check_best(
                     y_true=val_labels, p_pred=val_prob, y_pred=val_pred
@@ -341,12 +341,12 @@ class BaseTrainer:
                         f"({ckpt_saver.config.metric.name}: "
                         f"{metric_val:.6f})"
                     )
-            # Stop training if condition met
+
             if should_eval and (epoch - best_stopping_epoch >= patience):
                 break
 
-        # Wrapping up
-        # Save the last checkpoint, if not saved above
+
+
         if not ckpt_saver.check_interval(epoch):
             ckpt_fname = ckpt_saver.save_ckpt(
                 model=_unwrap_model(model), optimizer=optimizer, train_iter=epoch
@@ -356,9 +356,15 @@ class BaseTrainer:
         logger.info("Training completed")
         return
 
-    def test(self, model, test_dataset):
-        """Load the best or latest ckpt and evalutate on the given dataset."""
-        # Load the best or the latest model
+    def test(self, model, test_dataset, val_dataset=None):
+        """Load the best/latest ckpt and evaluate on the test dataset.
+
+        When ``tune_threshold_on_val`` is set and a ``val_dataset`` is supplied,
+        a single decision threshold for the F1/precision/recall metrics is
+        selected on the validation split and applied unchanged to the test
+        split (Section 4.2).  Rank-based metrics (P@k, AUC) are unaffected.
+        """
+
         ckpt_saver = ConfigMapper.get_object(
             "checkpoint_savers", self.config.checkpoint_saver.name
         )(self.config.checkpoint_saver.params)
@@ -379,17 +385,41 @@ class BaseTrainer:
         if self.config.use_gpu:
             model.to(device)
             logger.info(f"Using device: {device}")
-            # Wrap model in DataParallel for multi-GPU inference
+
             num_gpus = torch.cuda.device_count()
             if num_gpus > 1:
                 logger.info(f"Using {num_gpus} GPUs with DataParallel")
                 model = nn.DataParallel(model)
 
-        # Evaluate on test dataset
-        logger.info("Evaluating on test dataset")
-        metric_vals = self.evaluate(model, test_dataset)
 
-        # Print and save results
+        threshold = None
+        if val_dataset is not None and getattr(
+            self.config, "tune_threshold_on_val", False
+        ):
+            metric_name = getattr(
+                self.config, "threshold_metric", "micro_f1"
+            )
+            val_outputs, val_labels = self._forward_epoch(
+                model, dataset=val_dataset
+            )
+            val_probs = torch.sigmoid(val_outputs).numpy()
+            threshold, val_score = tune_global_threshold(
+                val_labels.numpy(), val_probs, metric=metric_name
+            )
+            logger.info(
+                "Tuned decision threshold on val: %.2f (%s = %.4f)",
+                threshold,
+                metric_name,
+                val_score,
+            )
+
+
+        logger.info("Evaluating on test dataset")
+        metric_vals = self.evaluate(model, test_dataset, threshold=threshold)
+        if threshold is not None:
+            metric_vals["decision_threshold"] = threshold
+
+
         for metric_name, metric_val in metric_vals.items():
             logger.info(f"{metric_name:>12}: {metric_val:6f}")
 
@@ -397,17 +427,19 @@ class BaseTrainer:
         logger.info(f"Saving result on {result_fpath}")
         save_json(metric_vals, result_fpath)
 
-    def evaluate(self, model, dataset=None, dataloader=None):
+    def evaluate(self, model, dataset=None, dataloader=None, threshold=None):
         """Evaluate the model on the given dataset."""
-        # Get preds and labels for the whole epoch
+
         epoch_outputs, epoch_labels = self._forward_epoch(
             model, dataset=dataset, dataloader=dataloader
         )
 
-        # Evaluate the predictions using self.eval_metrics
-        return self._compute_metrics(epoch_outputs, epoch_labels)
 
-    def _compute_metrics(self, outputs, labels, metric_names=None):
+        return self._compute_metrics(
+            epoch_outputs, epoch_labels, threshold=threshold
+        )
+
+    def _compute_metrics(self, outputs, labels, metric_names=None, threshold=None):
         """
         Compute the metrics of given names. Inputs should be Torch tensors.
         """
@@ -423,7 +455,10 @@ class BaseTrainer:
             preds[np.arange(preds.shape[0]), pred_idx] = 1
         else:
             probs = np.array(torch.sigmoid(outputs))
-            preds = probs.round()
+            if threshold is None:
+                preds = probs.round()
+            else:
+                preds = (probs >= threshold).astype(probs.dtype)
         for metric_name in metric_names:
             if metric_name == "loss":
                 if isinstance(self.loss_fn, CrossEntropyLoss):
@@ -441,9 +476,9 @@ class BaseTrainer:
         """Compute the forward pass on the given dataset."""
         assert dataset or dataloader
 
-        # Dataloader
+
         if dataloader is None:
-            # We force the data loader is not shuffled and fully checked
+
             data_config = self.config.data_loader.as_dict()
             data_config["drop_last"] = False
             data_config["shuffle"] = False
@@ -452,7 +487,7 @@ class BaseTrainer:
                 data_config["collate_fn"] = dataset.collate_fn
             dataloader = DataLoader(dataset, **data_config)
 
-        # Forward for the whole batch
+
         model.eval()
         epoch_outputs, epoch_labels = [], []
         with torch.no_grad():
@@ -464,7 +499,7 @@ class BaseTrainer:
                 epoch_labels.append(batch_labels.cpu())
                 epoch_outputs.append(batch_outputs.cpu())
 
-        # Concat
+
         epoch_labels = torch.cat(epoch_labels, 0)
         epoch_outputs = torch.cat(epoch_outputs, 0)
 

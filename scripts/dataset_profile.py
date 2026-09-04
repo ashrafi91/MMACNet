@@ -1,6 +1,5 @@
 import argparse
 import logging
-import os
 import re
 from pathlib import Path
 from typing import Any, Dict, Set, Tuple
@@ -108,8 +107,9 @@ def load_icd_dictionary(csv_dir: Path) -> Dict[str, str]:
 def load_rare_codes(rare_file: Path) -> Set[str]:
     if not rare_file.exists():
         raise FileNotFoundError(f"Rare code file not found at {rare_file}")
-    df = pd.read_csv(rare_file, dtype={"icd_9": "string"})
-    return set(df["icd_9"].dropna().apply(normalize_icd9))
+    df = pd.read_csv(rare_file, dtype="string")
+    col = "icd9_code" if "icd9_code" in df.columns else df.columns[0]
+    return set(df[col].dropna().apply(normalize_icd9))
 
 
 def build_demographic_summary(patients: pd.DataFrame, admissions: pd.DataFrame) -> pd.DataFrame:
@@ -510,8 +510,8 @@ def main() -> None:
     parser.add_argument(
         "--csv-dir",
         type=Path,
-        default=Path(os.environ.get("MIMIC_CSV_DIR", "datasets/mimic3/csv")),
-        help="Directory containing the MIMIC CSV exports (or set MIMIC_CSV_DIR)",
+        default=Path("/home/adnan.ashrafi/mimic3/csv"),
+        help="Directory containing the MIMIC CSV exports",
     )
     parser.add_argument(
         "--output-dir",
@@ -528,7 +528,7 @@ def main() -> None:
     parser.add_argument(
         "--rare-file",
         type=Path,
-        default=Path("datasets/mimic3_full/rare_icd9.csv"),
+        default=Path(__file__).resolve().parents[1] / "supplementary" / "rare_icd9_candidate_codes.csv",
         help="CSV of rare ICD-9 codes (one per row)",
     )
     parser.add_argument(

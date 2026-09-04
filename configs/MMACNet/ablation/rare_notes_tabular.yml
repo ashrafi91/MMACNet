@@ -1,9 +1,19 @@
+
+
+
+
+
+
+
+
+
+
 paths:
-  mimic_dir: &mimic_dir ${MIMIC_CSV_DIR:-datasets/mimic3/csv}
-  static_dir: &static_dir ${MIMIC_STATIC_DIR:-datasets/mimic3/static}
-  dataset_dir: &dataset_dir datasets/mimic3_full
-  word2vec_dir: &word2vec_dir datasets/mimic3_full/word2vec
-  output_dir: &output_dir results/MMACNet_mimic3_full
+  mimic_dir: &mimic_dir datasets/mimic3/csv
+  static_dir: &static_dir datasets/mimic3/static
+  dataset_dir: &dataset_dir datasets/mimic3_rare
+  word2vec_dir: &word2vec_dir datasets/mimic3_rare/word2vec
+  output_dir: &output_dir results/ablation/rare_notes_tabular
 
 dataset:
   name: base_dataset
@@ -17,7 +27,7 @@ dataset:
     unk_token: "<unk>"
     dataset_dir: *dataset_dir
     label_file: labels.json
-    max_length: 500
+    max_length: 1500
   params:
     train:
       <<: *data_common
@@ -37,59 +47,66 @@ model:
     mimic_dir: *mimic_dir
     static_dir: *static_dir
     word2vec_dir: *word2vec_dir
-    num_classes: 8930
+    num_classes: 568
     embed_size: 100
-    kernel_size: 100                    # was 100 – drastically reduces conv params
-    num_filter_maps: 128              # was 50  – wider feature maps for richer representations
-    dropout: 0.2
-    fc_dropout: 0.2
-    lmbda: 0.25 
+    kernel_size: 50
+    num_filter_maps: 50
+    conv_block_depth: 6
+    dropout: 0.6
+    fc_dropout: 0.3
+    conv_block_dropout: 0.0
+    lmbda: 0.25
     init_code_emb: false
     pad_token: "<pad>"
     unk_token: "<unk>"
-    conv_block_depth: 6               # was 4   – deeper network with residual connections
-    fc_layer_dims: [128, 64]          # was [128, 8693] – CRITICAL: eliminated bloated final layer
+    fc_layer_dims: [1024, 568]
     use_batch_norm: true
     conv_activation: relu
-    conv_block_dropout: 0.15
-    use_residual: true                # residual skip connections for stable deep training
-    use_se_block: true                # squeeze-and-excitation channel attention
-    se_reduction: 4                   # SE bottleneck ratio
-    use_depthwise_separable: true     # parameter-efficient convolutions (blocks 2+)
-    tabular_hidden_dim: 64
-    tabular_fusion: "early"
+    use_se_block: true
+    se_reduction: 4
+    use_residual: true
+    use_depthwise_separable: true
+    tabular_hidden_dim: 50
+    tabular_fusion: late
+    tabular_modalities: [numerical]
+
 trainer:
   name: base_trainer
   params:
     output_dir: *output_dir
+    tune_threshold_on_val: true
+    threshold_metric: micro_f1
     data_loader:
       batch_size: 512
       num_workers: 16
-      shuffle: false
+      shuffle: true
       drop_last: true
     loss:
-      name: CrossEntropyLoss
+      name: BinaryCrossEntropyLoss
       params: null
     optimizer:
       name: adam
       params:
-        lr: 0.0001
+        lr: 0.001
         weight_decay: 0.0
     max_epochs: 200
-    lr_scheduler: 
+    lr_scheduler:
       name: cosineanneal
-      params: 
+      params:
         T_max: 200
     stopping_criterion:
       metric:
         name: prec_at_8
+        class: prec_at_k
+        params:
+          k: 8
       desired: max
       patience: 15
     checkpoint_saver:
       name: base_saver
       params:
         checkpoint_dir: *output_dir
-        interval: 5
+        interval: 1
         max_to_keep: 5
         ckpt_fname_format: "ckpt-{}.pth"
         best_fname_format: "best-{}.pth"
@@ -99,7 +116,7 @@ trainer:
           params:
             k: 8
         desired: max
-    eval_metrics: 
+    eval_metrics:
       - name: prec_at_8
         class: prec_at_k
         params:
@@ -109,7 +126,11 @@ trainer:
         params:
           k: 15
       - name: macro_f1
+      - name: macro_prec
+      - name: macro_rec
       - name: micro_f1
+      - name: micro_prec
+      - name: micro_rec
       - name: macro_auc
       - name: micro_auc
     graph:
@@ -118,14 +139,12 @@ trainer:
         params:
           log_dir: *output_dir
       train:
-        eval_interval_epochs: 5
         interval: 100
         interval_unit: step
         metric:
           - name: loss
       val:
-        eval_interval_epochs: 5
-        interval: 5
+        interval: 1
         interval_unit: epoch
         metric:
           - name: loss
@@ -135,6 +154,5 @@ trainer:
           - name: micro_f1
           - name: macro_auc
           - name: micro_auc
-      eval_interval_epochs: 5
     seed: 1337
     use_gpu: true

@@ -27,8 +27,8 @@ class Word2VecEmbedding:
 
     def train(self, corpus):
         logger.debug("Training Word2Vec on clinical notes")
-        # build vocabulary and train model
-        # Resulting model doesn't have <pad> and <unk> which will be added
+
+
         model = gensim.models.Word2Vec(
             corpus, **self._config.word2vec_params.as_dict()
         )
@@ -36,7 +36,7 @@ class Word2VecEmbedding:
             os.path.join(self._config.embedding_dir, "word2vec.wordvectors")
         )
 
-        # Vocab: {<pad>: 0, <unk>: 1, word1: 2, word2: 3, ... }
+
         words = [
             self._config.pad_token,
             self._config.unk_token,
@@ -48,7 +48,7 @@ class Word2VecEmbedding:
             os.path.join(self._config.embedding_dir, "token_to_idx.json"),
         )
 
-        # Add <PAD> and <UNK> to the embedding matrix
+
         embedding_matrix = model.wv.get_normed_vectors()
         unk_emb = np.expand_dims(np.mean(embedding_matrix, axis=0), axis=0)
         pad_emb = np.zeros((1, embedding_matrix.shape[1]))
